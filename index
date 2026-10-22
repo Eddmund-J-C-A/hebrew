@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hebrew Study Notebook</title>
+<style>
+:root{--bg:#faf7f2;--card:#fff;--ink:#1f2430;--mut:#6b7280;--line:#e5e0d6;--acc:#1f4f9c;--accink:#fff;--ok:#2e7d4f;--bad:#b3392f;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15181f;--card:#1e222b;--ink:#eceae4;--mut:#9aa1ad;--line:#2d333f;--acc:#7aa7ff;--accink:#10131a;--ok:#6fcf97;--bad:#ff8a7a}}
+:root[data-theme="dark"]{--bg:#15181f;--card:#1e222b;--ink:#eceae4;--mut:#9aa1ad;--line:#2d333f;--acc:#7aa7ff;--accink:#10131a;--ok:#6fcf97;--bad:#ff8a7a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:680px;margin:0 auto;padding:16px}
+h1{font-size:1.3rem;margin:4px 0 12px}
+nav{display:flex;gap:6px;margin-bottom:16px}
+nav button{flex:1;padding:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;font-size:1rem;cursor:pointer}
+nav button.on{background:var(--acc);color:var(--accink);border-color:var(--acc)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+label{display:block;font-size:.85rem;color:var(--mut);margin:10px 0 4px}
+input,textarea,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+.he{font-family:"Noto Sans Hebrew","Arial Hebrew","David",serif;direction:rtl;text-align:right}
+button.pri{background:var(--acc);color:var(--accink);border:0;padding:11px 18px;border-radius:10px;font-size:1rem;cursor:pointer;margin-top:14px}
+button.sec{background:transparent;color:var(--ink);border:1px solid var(--line);padding:8px 12px;border-radius:8px;cursor:pointer;font-size:.9rem}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.seg{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.seg button{padding:6px 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.seg button.on{border-color:var(--acc);color:var(--acc);font-weight:600}
+.item{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.item .big{font-size:1.5rem}
+.tag{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+.mut{color:var(--mut);font-size:.9rem}
+.q{text-align:center;padding:28px 12px}
+.q .big{font-size:2.2rem;margin:8px 0}
+.ans{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)}
+.ok{background:var(--ok);color:#fff}.bad{background:var(--bad);color:#fff}
+.stat{display:flex;gap:16px;justify-content:center;margin:10px 0}
+.empty{text-align:center;color:var(--mut);padding:30px 0}
+</style>
+</head>
+<body>
+<main>
+<h1>עברית · Hebrew Study Notebook</h1>
+<nav id="nav"></nav>
+<div id="view"></div>
+<p class="mut" id="status" style="text-align:center;margin-top:20px"></p>
+</main>
+<script>
+(function(){
+var items=[], tab='add', col=null, editing=null;
+var LS='hebrew-study-items-v1';
+var $=function(s){return document.querySelector(s)};
+function h(tag,attrs,kids){var e=document.createElement(tag);for(var k in (attrs||{})){if(k==='class')e.className=attrs[k];else if(k.slice(0,2)==='on')e.addEventListener(k.slice(2),attrs[k]);else e.setAttribute(k,attrs[k]);}
+ (kids||[]).forEach(function(c){e.appendChild(typeof c==='string'?document.createTextNode(c):c)});return e}
+function uid(){return 'i'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+
+// ---------- storage + GitHub sync ----------
+var claude={use:async function(n){if(n!=='downloads')return null;return{save:async function(r){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([r.data],{type:'text/plain'}));a.download=r.filename;document.body.appendChild(a);a.click();a.remove()}}}};
+var LS='hebrew-study-items-v1',LSU='hebrew-study-updated-v1',U=0;
+function lsLoad(){try{U=+localStorage.getItem(LSU)||0;return JSON.parse(localStorage.getItem(LS)||'[]')}catch(e){return []}}
+function lsStore(){try{localStorage.setItem(LS,JSON.stringify(items));localStorage.setItem(LSU,String(U))}catch(e){}}
+function lsSave(){U=Date.now();lsStore();schedule()}
+function save(it){var i=items.findIndex(function(x){return x.id===it.id});if(i<0)items.push(it);else items[i]=it;lsSave()}
+function remove(id){items=items.filter(function(x){return x.id!==id});lsSave()}
+var G={repo:'',cfg:null,tok:null,key:null,salt:null,pass:'',sha:null,on:false,t:null,busy:false,again:false,msg:'',checked:false};
+try{G.cfg=JSON.parse(localStorage.getItem('hebrew-gh')||'null');if(G.cfg)G.repo=G.cfg.repo}catch(e){}
+function status(t){G.msg=t;['status','gst'].forEach(function(i){var e=document.getElementById(i);if(e)e.textContent=t})}
+function schedule(){if(!G.on||!G.tok)return;status('Saving\u2026');clearTimeout(G.t);G.t=setTimeout(function(){sync()},1200)}
+function b64(u){var s='',a=new Uint8Array(u);for(var i=0;i<a.length;i+=8192)s+=String.fromCharCode.apply(null,a.subarray(i,i+8192));return btoa(s)}
+function ub64(t){return Uint8Array.from(atob(t),function(c){return c.charCodeAt(0)})}
+async function dkey(pass,salt){var k=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:250000,hash:'SHA-256'},k,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function enc(key,txt){var iv=crypto.getRandomValues(new Uint8Array(12));var ct=await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},key,new TextEncoder().encode(txt));return{iv:b64(iv),ct:b64(ct)}}
+async function dec(key,o){return new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:ub64(o.iv)},key,ub64(o.ct)))}
+function GHH(){return{Authorization:'Bearer '+G.tok,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}}
+var TOKERR='GitHub refused the token (it needs Contents read and write on this repository, and must not be expired)';
+async function gh(method,body){var r=await fetch('https://api.github.com/repos/'+G.repo+'/contents/hebrew-study.enc.json',{method:method,cache:'no-store',headers:GHH(),body:body?JSON.stringify(body):undefined});
+ if(r.status==404&&method=='GET')return null;if(r.status==401||r.status==403)throw new Error(TOKERR);if(!r.ok)throw new Error('GitHub error '+r.status);return r.json()}
+async function remote(){
+ if(!G.checked){var rr=await fetch('https://api.github.com/repos/'+G.repo,{cache:'no-store',headers:GHH()});
+  if(rr.status==401||rr.status==403)throw new Error(TOKERR);if(rr.status==404)throw new Error('GitHub cannot find that repository, or the token cannot see it');if(!rr.ok)throw new Error('GitHub error '+rr.status);
+  var rj=await rr.json();if(rj.private===false)throw new Error('That repository is public. Please use a private one');G.checked=true}
+ var j=await gh('GET');if(!j){G.sha=null;return null}G.sha=j.sha;return JSON.parse(atob(j.content.replace(/\s/g,'')))}
+async function upload(){var e=await enc(G.key,JSON.stringify({items:items}));var body={message:'Notebook update',content:btoa(JSON.stringify({v:1,salt:G.salt,iv:e.iv,ct:e.ct,u:U}))};if(G.sha)body.sha=G.sha;var j=await gh('PUT',body);G.sha=j.content.sha}
+async function sync(){
+ if(!G.tok||!G.pass){status('Enter your sync passphrase to start syncing.');return false}
+ if(G.busy){G.again=true;return false}G.busy=true;var ok=false;
+ try{status('Syncing\u2026');var r=await remote();
+  if(!G.key||(r&&r.salt!=G.salt)){var salt=r?ub64(r.salt):crypto.getRandomValues(new Uint8Array(16));G.key=await dkey(G.pass,salt);G.salt=b64(salt)}
+  var d=null;if(r){try{d=JSON.parse(await dec(G.key,r))}catch(e){G.key=null;G.salt=null;throw new Error('Wrong passphrase, or the file was changed')}}
+  if(r&&r.u>U&&d&&d.items){items=d.items;U=r.u;lsStore();render()}
+  else if(!r||U>r.u){if(!U)U=Date.now();lsStore();await upload()}
+  status('\ud83d\udd12 Synced (encrypted) with GitHub at '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}));ok=true}
+ catch(e){status('Not synced: '+(e.message||'error')+'. Your data is safe on this device.')}
+ G.busy=false;if(G.again){G.again=false;schedule()}return ok}
+async function gconnect(){
+ var repo=$('#ghrepo').value.trim(),tk=$('#ghtok').value.trim(),pass=$('#ghpass').value;
+ if(!/^[\w.-]+\/[\w.-]+$/.test(repo)){status('Enter the repository as owner/name.');return}
+ if(pass.length<8){status('Use a passphrase of at least 8 characters.');return}
+ try{G.repo=repo;G.pass=pass;G.key=null;G.salt=null;G.checked=false;
+  if(tk)G.tok=tk;else{if(!G.cfg||!G.cfg.tokEnc){status('Paste your GitHub token.');return}
+   try{G.tok=await dec(await dkey(pass,ub64(G.cfg.salt)),G.cfg.tokEnc)}catch(e){status('Wrong passphrase.');return}}
+  G.on=true;var ok=await sync();if(!ok){G.on=false;G.tok=null;return}
+  G.cfg={repo:G.repo,salt:G.salt,tokEnc:await enc(G.key,G.tok)};try{localStorage.setItem('hebrew-gh',JSON.stringify(G.cfg))}catch(e){}render()}
+ catch(e){status('Could not connect: '+(e.message||'error'))}}
+function gdisc(){G.on=false;G.tok=null;G.key=null;G.pass='';G.cfg=null;try{localStorage.removeItem('hebrew-gh')}catch(e){}status('Sync is off and forgotten on this device. Your encrypted file stays in your repository.');render()}
+function gInit(){status(G.cfg?'Enter your sync passphrase on the Backup tab to resume syncing.':'Saved on this device only.');
+ document.addEventListener('visibilitychange',function(){if(!document.hidden&&G.on&&G.tok)sync()})}
+function gitCard(){
+ function inp(id,type,val,ph){var e=h('input',{id:id,type:type,autocomplete:'off',placeholder:ph||''});e.value=val||'';return e}
+ function lab(t,e){return h('div',{},[h('label',{for:e.id},[t]),e])}
+ var btns=[h('button',{class:'pri',onclick:gconnect},[G.on?'Reconnect':G.cfg?'Unlock sync':'Connect GitHub']),
+  h('button',{class:'sec',style:'margin-top:14px',onclick:function(){sync()}},['Sync now'])];
+ if(G.cfg)btns.push(h('button',{class:'sec',style:'margin-top:14px',onclick:gdisc},['Forget on this device']));
+ var li=function(t){return h('li',{},[t])};
+ return h('div',{class:'card'},[h('h3',{style:'margin:0 0 6px'},['GitHub sync (encrypted)']),
+  h('p',{class:'mut',style:'margin:0'},['Keeps one encrypted file in a private GitHub repository that you own. Your notebook is scrambled in this browser with your passphrase before it leaves the device, so GitHub only holds unreadable data. If two devices edit at once, the newest edit wins.']),
+  lab('Private repository (owner/name)',inp('ghrepo','text',G.repo,'yourname/hebrew-data')),
+  lab('Access token',inp('ghtok','password','',G.cfg?'Saved \u2014 leave blank':'Paste your token')),
+  lab('Sync passphrase',inp('ghpass','password','')),
+  h('div',{class:'row'},btns),
+  h('p',{class:'mut',id:'gst',role:'status'},[G.msg||'']),
+  h('details',{},[h('summary',{},['One-time setup']),h('ol',{class:'mut'},[
+   li('Create a second GitHub repository, such as hebrew-data. Set it to Private and add a README. Keep it separate from the public repository that hosts this page.'),
+   li('On GitHub go to Settings, Developer settings, Personal access tokens, Fine-grained tokens. Choose Only select repositories, pick hebrew-data, and set Contents to Read and write. Generate the token and copy it.'),
+   li('Paste the repository, token and a passphrase here and press Connect. The passphrase cannot be recovered, so choose one you will remember.'),
+   li('On another device, open this page and enter the same repository, token and passphrase. After that it only asks for the passphrase.')])])])}
+function init(){items=lsLoad();render();gInit()}
+
+// ---------- views ----------
+function render(){
+ var nav=$('#nav');nav.innerHTML='';
+ [['add','Add'],['review','Review ('+items.length+')'],['quiz','Quiz'],['backup','Backup']].forEach(function(t){
+  nav.appendChild(h('button',{class:tab===t[0]?'on':'',onclick:function(){tab=t[0];if(tab==='quiz')resetQuiz();render()}},[t[1]]))});
+ var v=$('#view');v.innerHTML='';
+ (tab==='add'?viewAdd:tab==='review'?viewReview:tab==='backup'?viewBackup:viewQuiz)(v);
+}
+
+function field(label,id,val,he,multi){var el=multi?h('textarea',{id:id,rows:'3'}):h('input',{id:id,type:'text',autocomplete:'off'});
+ if(he){el.className='he';el.setAttribute('dir','rtl');el.setAttribute('lang','he')}el.value=val||'';
+ return h('div',{},[h('label',{for:id},[label]),el])}
+
+function viewAdd(v){
+ var e=editing?items.find(function(x){return x.id===editing}):null;var kind=e?e.kind:'vocab';
+ var card=h('div',{class:'card'});
+ var seg=h('div',{class:'seg'});
+ ['vocab','grammar'].forEach(function(k){seg.appendChild(h('button',{class:kind===k?'on':'',onclick:function(){kind=k;draw()}},[k==='vocab'?'Vocabulary':'Grammar']))});
+ function draw(){
+  var keep=e||{};['he','tr','en','nt'].forEach(function(f){var x=$('#f_'+f);if(x)keep[f]=x.value});
+  card.innerHTML='';card.appendChild(seg);
+  seg.querySelectorAll('button').forEach(function(b,i){b.className=(i===0?kind==='vocab':kind==='grammar')?'on':''});
+  var g=kind==='grammar';
+  card.appendChild(field(g?'Hebrew example or pattern':'Hebrew word','f_he',keep.he,true));
+  card.appendChild(field('Transliteration (optional)','f_tr',keep.tr));
+  card.appendChild(field(g?'Rule name / what it means':'English meaning','f_en',keep.en));
+  card.appendChild(field('Notes (optional)','f_nt',keep.nt,false,true));
+  card.appendChild(h('div',{class:'row'},[h('button',{class:'pri',onclick:submit},[e?'Save changes':'Add to notebook']),
+   e?h('button',{class:'sec',style:'margin-top:14px',onclick:function(){editing=null;render()}},['Cancel']):''].filter(Boolean)));
+ }
+ function submit(){
+  var he=$('#f_he').value.trim(),en=$('#f_en').value.trim();
+  if(!he||!en){status('Please fill in both the Hebrew and the meaning.');return}
+  var it=e||{id:uid(),added:Date.now(),right:0,wrong:0,streak:0};
+  it.kind=kind;it.he=he;it.tr=$('#f_tr').value.trim();it.en=en;it.nt=$('#f_nt').value.trim();
+  save(it);editing=null;status('Saved ✓');if(e){tab='review'}render();
+  var f=$('#f_he');if(f)f.focus();
+ }
+ draw();v.appendChild(card);
+}
+
+var filt='all';
+function viewReview(v){
+ var seg=h('div',{class:'seg'});
+ [['all','All'],['vocab','Vocabulary'],['grammar','Grammar']].forEach(function(f){seg.appendChild(h('button',{class:filt===f[0]?'on':'',onclick:function(){filt=f[0];render()}},[f[1]]))});
+ v.appendChild(seg);
+ var q=h('input',{type:'text',placeholder:'Search…',style:'margin-bottom:12px'});v.appendChild(q);
+ var list=h('div');v.appendChild(list);
+ function draw(){list.innerHTML='';var s=q.value.toLowerCase();
+  var xs=items.filter(function(i){return (filt==='all'||i.kind===filt)&&(i.he+i.tr+i.en+i.nt).toLowerCase().indexOf(s)>=0}).sort(function(a,b){return b.added-a.added});
+  if(!xs.length){list.appendChild(h('div',{class:'empty'},[items.length?'Nothing matches.':'Nothing here yet. Add your first word or grammar point!']));return}
+  xs.forEach(function(i){
+   var left=h('div',{},[h('div',{class:'big he',lang:'he'},[i.he]),
+    h('div',{},[i.en]),i.tr?h('div',{class:'mut'},[i.tr]):'',i.nt?h('div',{class:'mut'},[i.nt]):'']);
+   var tot=i.right+i.wrong;
+   var right=h('div',{style:'text-align:right;min-width:90px'},[h('span',{class:'tag'},[i.kind]),
+    h('div',{class:'mut'},[tot?i.right+'/'+tot+' correct':'not quizzed']),
+    h('div',{class:'row',style:'justify-content:flex-end;margin-top:6px'},[
+     h('button',{class:'sec',onclick:function(){editing=i.id;tab='add';render();window.scrollTo(0,0)}},['Edit']),
+     h('button',{class:'sec',onclick:function(){if(confirm('Delete this entry?')){remove(i.id);render()}}},['✕'])])]);
+   list.appendChild(h('div',{class:'card item'},[left,right]));
+  })}
+ q.addEventListener('input',draw);draw();
+}
+
+// ---------- backup / merge ----------
+var dl=null;
+function stamp(){return new Date().toISOString().slice(0,10)}
+function csvEsc(s){s=String(s==null?'':s);return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function toCSV(){var rows=[['kind','hebrew','transliteration','meaning','notes','right','wrong']];
+ items.forEach(function(i){rows.push([i.kind,i.he,i.tr,i.en,i.nt,i.right,i.wrong])});
+ return '\ufeff'+rows.map(function(r){return r.map(csvEsc).join(',')}).join('\r\n')}
+function toJSON(){return JSON.stringify({app:'hebrew-study',version:1,exported:new Date().toISOString(),items:items},null,2)}
+function parseCSV(t){var rows=[],row=[],f='',q=false,i=0;t=t.replace(/^\ufeff/,'');
+ for(;i<t.length;i++){var c=t[i];
+  if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+  else if(c==='"')q=true;else if(c===','){row.push(f);f=''}
+  else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;row.push(f);f='';rows.push(row);row=[]}
+  else f+=c}
+ if(f!==''||row.length){row.push(f);rows.push(row)}
+ if(rows.length&&/hebrew/i.test(rows[0].join(',')))rows.shift();
+ return rows.filter(function(r){return r.some(function(x){return x.trim()})}).map(function(r){return {kind:r[0],he:r[1],tr:r[2],en:r[3],nt:r[4],right:r[5],wrong:r[6]}})}
+function parseAny(t){t=t.trim();if(!t)return [];
+ if(t[0]==='['||t[0]==='{'){var d=JSON.parse(t);return Array.isArray(d)?d:(d.items||[])}
+ return parseCSV(t)}
+function key(i){return String(i.he||'').replace(/[\u0591-\u05C7]/g,'').trim()+'|'+String(i.en||'').toLowerCase().trim()}
+function merge(list){var a=0,u=0,s=0,idx={};items.forEach(function(i){idx[key(i)]=i});
+ list.forEach(function(n){
+  if(!n||!n.he||!n.en){s++;return}
+  var k=key(n),o=idx[k];
+  if(!o){var it={id:uid(),kind:n.kind==='grammar'?'grammar':'vocab',he:String(n.he).trim(),tr:n.tr||'',en:String(n.en).trim(),nt:n.nt||'',added:+n.added||Date.now(),right:+n.right||0,wrong:+n.wrong||0};save(it);idx[k]=it;a++}
+  else{var ch=false;
+   if(!o.tr&&n.tr){o.tr=n.tr;ch=true}
+   if(!o.nt&&n.nt){o.nt=n.nt;ch=true}
+   else if(n.nt&&o.nt!==n.nt&&o.nt.indexOf(n.nt)<0){o.nt+=' | '+n.nt;ch=true}
+   var r=Math.max(o.right,+n.right||0),w=Math.max(o.wrong,+n.wrong||0);
+   if(r!==o.right||w!==o.wrong){o.right=r;o.wrong=w;ch=true}
+   if(ch){save(o);u++}else s++}});
+ return {a:a,u:u,s:s}}
+function viewBackup(v){
+ var out=h('textarea',{rows:'4',readonly:'readonly',placeholder:'Export text appears here if the download is blocked — copy it from here.',style:'margin-top:10px;display:none'});
+ async function exp(name,text){
+  if(!items.length){status('Nothing to export yet.');return}
+  out.value=text;
+  try{if(!dl)dl=await claude.use('downloads');
+   if(dl){await dl.save({filename:name,data:text});status('Export saved ✓');return}}
+  catch(e){if(e&&e.code==='declined'){status('Download cancelled.');return}}
+  out.style.display='block';out.select();status('Download is unavailable here — copy the text below and save it in a file.')}
+ var c1=h('div',{class:'card'},[h('h3',{style:'margin:0 0 6px'},['Export']),
+  h('p',{class:'mut',style:'margin:0 0 10px'},['Save a backup file, or a CSV you can open in Excel, Google Sheets or import into other flashcard apps. Store it in Drive, iCloud or Dropbox if you like.']),
+  h('div',{class:'row'},[
+   h('button',{class:'sec',onclick:function(){exp('hebrew-notebook-'+stamp()+'.json',toJSON())}},['Download JSON backup']),
+   h('button',{class:'sec',onclick:function(){exp('hebrew-notebook-'+stamp()+'.csv',toCSV())}},['Download CSV'])]),out]);
+ var ta=h('textarea',{rows:'6',placeholder:'Paste JSON or CSV here, or choose a file above…',style:'margin-top:10px'});
+ var fi=h('input',{type:'file',accept:'.json,.csv,.txt,application/json,text/csv,text/plain'});
+ fi.addEventListener('change',function(){var f=fi.files&&fi.files[0];if(!f)return;var r=new FileReader();
+  r.onload=function(){ta.value=String(r.result);status('File loaded — review it, then press Merge.')};r.readAsText(f)});
+ var c2=h('div',{class:'card'},[h('h3',{style:'margin:0 0 6px'},['Import & merge']),
+  h('p',{class:'mut',style:'margin:0 0 10px'},['Combine a backup with what’s already here. Entries are matched by Hebrew (ignoring vowel points) plus meaning. Matches keep your existing entry, fill in blanks and keep the higher quiz scores; new ones are added. Nothing is deleted.']),
+  fi,ta,
+  h('button',{class:'pri',onclick:function(){
+   try{var list=parseAny(ta.value);if(!list.length){status('Nothing to import.');return}
+    var res=merge(list);ta.value='';status('Merged: '+res.a+' added, '+res.u+' updated, '+res.s+' unchanged or skipped.');
+    setTimeout(render,0)}catch(e){status('Could not read that — check it is a JSON backup or CSV from this app.')}}},['Merge into notebook'])]);
+ var c3=h('div',{class:'card'},[h('h3',{style:'margin:0 0 6px'},['Cloud sync']),
+  h('p',{class:'mut',style:'margin:0'},['Your notebook is saved to your claude.ai account automatically, so opening this page’s link on any phone or computer signed in to the same account shows the same entries. Pages like this can’t talk directly to Google Drive or Dropbox, so use the export file for those.'])]);
+ v.appendChild(c1);v.appendChild(c2);v.appendChild(gitCard());
+}
+
+// ---------- quiz ----------
+var Q={kind:'all',dir:'he-en',queue:[],cur:null,shown:false,ok:0,bad:0,started:false};
+function resetQuiz(){Q.started=false;Q.cur=null;Q.ok=0;Q.bad=0}
+function startQuiz(){
+ var pool=items.filter(function(i){return Q.kind==='all'||i.kind===Q.kind});
+ // weight: struggling items appear first
+ Q.queue=pool.map(function(i){var t=i.right+i.wrong;return {i:i,w:Math.random()+(t?i.wrong/t:0.5)}}).sort(function(a,b){return b.w-a.w}).map(function(x){return x.i});
+ Q.started=true;Q.ok=0;Q.bad=0;next();
+}
+function next(){Q.cur=Q.queue.shift()||null;Q.shown=false;
+ Q.d=Q.dir==='mix'?(Math.random()<.5?'he-en':'en-he'):Q.dir}
+function viewQuiz(v){
+ if(!Q.started){
+  var c=h('div',{class:'card'});
+  c.appendChild(h('label',{},['What to practice']));
+  var s1=h('div',{class:'seg'});[['all','Everything'],['vocab','Vocabulary'],['grammar','Grammar']].forEach(function(x){s1.appendChild(h('button',{class:Q.kind===x[0]?'on':'',onclick:function(){Q.kind=x[0];render()}},[x[1]]))});c.appendChild(s1);
+  c.appendChild(h('label',{},['Direction']));
+  var s2=h('div',{class:'seg'});[['he-en','Hebrew → English'],['en-he','English → Hebrew'],['mix','Mixed']].forEach(function(x){s2.appendChild(h('button',{class:Q.dir===x[0]?'on':'',onclick:function(){Q.dir=x[0];render()}},[x[1]]))});c.appendChild(s2);
+  var n=items.filter(function(i){return Q.kind==='all'||i.kind===Q.kind}).length;
+  c.appendChild(h('p',{class:'mut'},[n?n+' cards ready. Ones you miss more often come up first.':'Add some entries first, then come back to quiz yourself.']));
+  var b=h('button',{class:'pri',onclick:startQuiz},['Start quiz']);if(!n)b.disabled=true;c.appendChild(b);
+  v.appendChild(c);return}
+ if(!Q.cur){
+  var t=Q.ok+Q.bad;
+  v.appendChild(h('div',{class:'card q'},[h('div',{class:'big'},['🎉']),h('h2',{},['Round complete']),
+   h('div',{},[t?Q.ok+' of '+t+' correct ('+Math.round(100*Q.ok/t)+'%)':'']),
+   h('div',{class:'row',style:'justify-content:center'},[h('button',{class:'pri',onclick:startQuiz},['Go again']),h('button',{class:'sec',style:'margin-top:14px',onclick:function(){resetQuiz();render()}},['Change settings'])])]));return}
+ var i=Q.cur,heFirst=Q.d==='he-en';
+ var promptEl=heFirst?h('div',{class:'big he',lang:'he'},[i.he]):h('div',{class:'big'},[i.en]);
+ var card=h('div',{class:'card q'},[h('span',{class:'tag'},[i.kind]),promptEl]);
+ if(heFirst&&i.tr)card.appendChild(h('div',{class:'mut'},['('+i.tr+')']));
+ if(!Q.shown){card.appendChild(h('button',{class:'pri',onclick:function(){Q.shown=true;render()}},['Show answer']))}
+ else{
+  var a=h('div',{class:'ans'},[heFirst?h('div',{class:'big'},[i.en]):h('div',{class:'big he',lang:'he'},[i.he])]);
+  if(!heFirst&&i.tr)a.appendChild(h('div',{class:'mut'},[i.tr]));
+  if(i.nt)a.appendChild(h('div',{class:'mut'},[i.nt]));
+  a.appendChild(h('div',{class:'row',style:'justify-content:center;margin-top:14px'},[
+   h('button',{class:'pri bad',onclick:function(){grade(false)}},['Missed it']),
+   h('button',{class:'pri ok',onclick:function(){grade(true)}},['Got it'])]));
+  card.appendChild(a)}
+ v.appendChild(card);
+ v.appendChild(h('div',{class:'stat mut'},[h('span',{},['✓ '+Q.ok]),h('span',{},['✗ '+Q.bad]),h('span',{},[Q.queue.length+' left'])]));
+ v.appendChild(h('div',{style:'text-align:center'},[h('button',{class:'sec',onclick:function(){resetQuiz();render()}},['End quiz'])]));
+}
+function grade(ok){var i=Q.cur;if(ok){i.right++;Q.ok++}else{i.wrong++;Q.bad++;Q.queue.push(i)}
+ save(i);next();render()}
+
+init();
+})();
+</script>
+</body>
+</html>
