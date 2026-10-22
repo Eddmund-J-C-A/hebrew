@@ -88,7 +88,7 @@ async function sync(){
  try{status('Syncing\u2026');var r=await remote();
   if(!G.key||(r&&r.salt!=G.salt)){var salt=r?ub64(r.salt):crypto.getRandomValues(new Uint8Array(16));G.key=await dkey(G.pass,salt);G.salt=b64(salt)}
   var d=null;if(r){try{d=JSON.parse(await dec(G.key,r))}catch(e){G.key=null;G.salt=null;throw new Error('Wrong passphrase, or the file was changed')}}
-  if(r&&r.u>U&&d&&d.items){items=d.items;U=r.u;lsStore();render()}
+  if(r&&r.u>U&&d&&d.items){items=d.items;U=r.u;lsStore();refreshAfterSync()}
   else if(!r||U>r.u){if(!U)U=Date.now();lsStore();await upload()}
   status('\ud83d\udd12 Synced (encrypted) with GitHub at '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}));ok=true}
  catch(e){status('Not synced: '+(e.message||'error')+'. Your data is safe on this device.')}
@@ -125,13 +125,14 @@ function gitCard(){
    li('On GitHub go to Settings, Developer settings, Personal access tokens, Fine-grained tokens. Choose Only select repositories, pick hebrew-data, and set Contents to Read and write. Generate the token and copy it.'),
    li('Paste the repository, token and a passphrase here and press Connect. The passphrase cannot be recovered, so choose one you will remember.'),
    li('On another device, open this page and enter the same repository, token and passphrase. After that it only asks for the passphrase.')])])])}
+function refreshAfterSync(){if(tab==='review'||(tab==='quiz'&&!Q.started))render();else{var b=document.querySelectorAll('#nav button')[1];if(b)b.textContent='Review ('+items.length+')'}}
 function init(){items=lsLoad();render();gInit()}
 
 // ---------- views ----------
 function render(){
  var nav=$('#nav');nav.innerHTML='';
  [['add','Add'],['review','Review ('+items.length+')'],['quiz','Quiz'],['backup','Backup']].forEach(function(t){
-  nav.appendChild(h('button',{class:tab===t[0]?'on':'',onclick:function(){tab=t[0];if(tab==='quiz')resetQuiz();render()}},[t[1]]))});
+  nav.appendChild(h('button',{class:tab===t[0]?'on':'',onclick:function(){tab=t[0];editing=null;if(tab==='quiz')resetQuiz();render()}},[t[1]]))});
  var v=$('#view');v.innerHTML='';
  (tab==='add'?viewAdd:tab==='review'?viewReview:tab==='backup'?viewBackup:viewQuiz)(v);
 }
@@ -146,7 +147,7 @@ function viewAdd(v){
  var seg=h('div',{class:'seg'});
  ['vocab','grammar'].forEach(function(k){seg.appendChild(h('button',{class:kind===k?'on':'',onclick:function(){kind=k;draw()}},[k==='vocab'?'Vocabulary':'Grammar']))});
  function draw(){
-  var keep=e||{};['he','tr','en','nt'].forEach(function(f){var x=$('#f_'+f);if(x)keep[f]=x.value});
+  var keep=Object.assign({},e||{});['he','tr','en','nt'].forEach(function(f){var x=$('#f_'+f);if(x)keep[f]=x.value});
   card.innerHTML='';card.appendChild(seg);
   seg.querySelectorAll('button').forEach(function(b,i){b.className=(i===0?kind==='vocab':kind==='grammar')?'on':''});
   var g=kind==='grammar';
@@ -186,7 +187,7 @@ function viewReview(v){
     h('div',{class:'mut'},[tot?i.right+'/'+tot+' correct':'not quizzed']),
     h('div',{class:'row',style:'justify-content:flex-end;margin-top:6px'},[
      h('button',{class:'sec',onclick:function(){editing=i.id;tab='add';render();window.scrollTo(0,0)}},['Edit']),
-     h('button',{class:'sec',onclick:function(){if(confirm('Delete this entry?')){remove(i.id);render()}}},['✕'])])]);
+     h('button',{class:'sec',onclick:function(ev){var b=ev.currentTarget;if(b.dataset.arm){remove(i.id);render()}else{b.dataset.arm='1';b.textContent='Delete?';setTimeout(function(){b.dataset.arm='';b.textContent='✕'},3000)}}},['✕'])])]);
    list.appendChild(h('div',{class:'card item'},[left,right]));
   })}
  q.addEventListener('input',draw);draw();
